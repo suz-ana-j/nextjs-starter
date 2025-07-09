@@ -1,73 +1,74 @@
-import { useState } from 'react';
-import Head from 'next/head';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 
 export default function ResetPasswordPage() {
+  const router = useRouter();
+  const [accessToken, setAccessToken] = useState('');
   const [password, setPassword] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(null);
+  const [resetting, setResetting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitted(false);
-    setError(null);
-
+  useEffect(() => {
     const hash = window.location.hash;
-    const accessToken = new URLSearchParams(hash.replace('#', '?')).get('access_token');
+    const token = new URLSearchParams(hash.replace('#', '?')).get('access_token');
+    if (token) setAccessToken(token);
+  }, []);
 
-    if (!accessToken) {
-      setError('Invalid or missing token.');
-      return;
-    }
+  const handleReset = async () => {
+    setResetting(true);
+    setError('');
+    try {
+      const res = await fetch('https://satybfotfjmvhzfbxdzj.supabase.co/auth/v1/user', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhdHliZm90Zmptdmh6ZmJ4ZHpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY0NTQ2MDgsImV4cCI6MjA2MjAzMDYwOH0.-N7bD7lHXp2SCqncCk1U4YytRZZLnJhVi68tM6dn0ZQ',
+        },
+        body: JSON.stringify({ password }),
+      });
 
-    const res = await fetch('https://satybfotfjmvhzfbxdzj.supabase.co/auth/v1/user', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ password }),
-    });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err?.message || 'Reset failed');
+      }
 
-    if (res.ok) {
-      setSubmitted(true);
-    } else {
-      const result = await res.json();
-      setError(result?.message || 'An error occurred.');
+      setDone(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResetting(false);
     }
   };
 
   return (
-    <>
-      <Head>
-        <title>Reset Your Password – Plynk</title>
-      </Head>
-      <div style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-        <div style={{ maxWidth: 400, width: '100%' }}>
-          <h1 style={{ fontSize: 24, marginBottom: 20 }}>Reset Your Password</h1>
-          {submitted ? (
-            <p>Your password has been updated. You can now log in to Plynk.</p>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              <input
-                type="password"
-                placeholder="New Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{ width: '100%', padding: 10, marginBottom: 10, borderRadius: 5, border: 'none' }}
-              />
-              <button
-                type="submit"
-                style={{ width: '100%', padding: 12, backgroundColor: '#7DA7C1', border: 'none', color: '#fff', borderRadius: 5 }}
-              >
-                Set New Password
-              </button>
-              {error && <p style={{ color: 'tomato', marginTop: 10 }}>{error}</p>}
-            </form>
-          )}
-        </div>
+    <div style={{ backgroundColor: 'black', color: 'white', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ maxWidth: 400, padding: 24 }}>
+        {done ? (
+          <h2>Password reset successful. You can now log in to your Plynk account.</h2>
+        ) : (
+          <>
+            <h1 style={{ marginBottom: 16 }}>Reset Your Password</h1>
+            <input
+              type="password"
+              placeholder="New password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ width: '100%', padding: 10, marginBottom: 12, borderRadius: 4 }}
+            />
+            <button
+              onClick={handleReset}
+              disabled={resetting}
+              style={{ padding: 10, width: '100%', backgroundColor: '#7DA7C1', color: 'white', border: 'none', borderRadius: 4 }}
+            >
+              {resetting ? 'Resetting...' : 'Set New Password'}
+            </button>
+            {error && <p style={{ color: 'red', marginTop: 12 }}>{error}</p>}
+          </>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
