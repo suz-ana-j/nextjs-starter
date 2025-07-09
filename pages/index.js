@@ -1,48 +1,56 @@
 import { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  'https://YOUR_PROJECT_ID.supabase.co',
+  'YOUR_PUBLIC_ANON_KEY'
+);
 
 export default function Home() {
-  const [isRecovery, setIsRecovery] = useState(false);
-  const [accessToken, setAccessToken] = useState('');
+  const [mode, setMode] = useState('confirm'); // 'confirm' or 'recovery'
+  const [token, setToken] = useState(null);
   const [newPassword, setNewPassword] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.substring(1));
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
     const type = params.get('type');
-    const token = params.get('access_token');
+    const access_token = params.get('access_token');
 
-    if (type === 'recovery' && token) {
-      setIsRecovery(true);
-      setAccessToken(token);
+    if (type === 'recovery' && access_token) {
+      setMode('recovery');
+      setToken(access_token);
     }
   }, []);
 
-  const handlePasswordReset = async () => {
-    if (!newPassword) {
-      setError('Please enter a new password.');
-      return;
-    }
-
+  const handleReset = async () => {
+    setStatus('Resetting password...');
     try {
-      const res = await fetch('https://satybfotfjmvhzfbxdzj.supabase.co/auth/v1/user', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ password: newPassword }),
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: '', // not needed for password reset
       });
 
-      if (res.ok) {
-        setSubmitted(true);
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        setStatus('Failed to authenticate session.');
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        setStatus('Password reset failed: ' + error.message);
       } else {
-        const data = await res.json();
-        setError(data.message || 'Failed to reset password.');
+        setStatus('✅ Password updated! You can now log in to your Plynk account.');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      console.error('Unexpected error:', err);
+      setStatus('Something went wrong.');
     }
   };
 
@@ -50,64 +58,48 @@ export default function Home() {
     <div style={{
       backgroundColor: '#000',
       color: '#fff',
-      height: '100vh',
+      minHeight: '100vh',
       display: 'flex',
-      alignItems: 'center',
       justifyContent: 'center',
-      fontFamily: 'sans-serif',
-      textAlign: 'center',
-      padding: '20px'
+      alignItems: 'center',
+      flexDirection: 'column',
+      padding: 20
     }}>
-      {!isRecovery && (
-        <div>
-          <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🎉 Email Confirmed</h1>
-          <p style={{ fontSize: '1.2rem' }}>
-            Thank you for confirming your email.<br />
-            You can now log in to your <strong>Plynk</strong> account!
-          </p>
-        </div>
-      )}
-
-      {isRecovery && !submitted && (
-        <div style={{ maxWidth: '400px', width: '100%' }}>
-          <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>🔐 Reset Your Password</h1>
+      {mode === 'recovery' ? (
+        <>
+          <h1 style={{ fontSize: 24, marginBottom: 16 }}>Reset Your Password</h1>
           <input
             type="password"
-            placeholder="Enter new password"
+            placeholder="New password"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={e => setNewPassword(e.target.value)}
             style={{
-              padding: '12px',
-              width: '100%',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              marginBottom: '10px'
+              padding: 10,
+              fontSize: 16,
+              borderRadius: 8,
+              marginBottom: 12,
+              width: 280,
             }}
           />
-          <button
-            onClick={handlePasswordReset}
-            style={{
-              padding: '12px 20px',
-              backgroundColor: '#7DA7C1',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
+          <button onClick={handleReset} style={{
+            padding: '10px 20px',
+            fontSize: 16,
+            backgroundColor: '#7DA7C1',
+            border: 'none',
+            borderRadius: 8,
+            cursor: 'pointer',
+            color: '#fff',
+          }}>
             Submit
           </button>
-          {error && <p style={{ color: '#FF6B6B', marginTop: '10px' }}>{error}</p>}
-        </div>
-      )}
-
-      {isRecovery && submitted && (
-        <div>
-          <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>✅ Password Updated</h1>
-          <p>You can now log in to your Plynk account with your new password.</p>
-        </div>
+          <p style={{ marginTop: 20 }}>{status}</p>
+        </>
+      ) : (
+        <>
+          <h1 style={{ fontSize: 24, marginBottom: 16 }}>Thank you for confirming your email.</h1>
+          <p style={{ fontSize: 18 }}>You can now log in to your Plynk account.</p>
+        </>
       )}
     </div>
   );
 }
-
